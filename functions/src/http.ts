@@ -3,10 +3,32 @@ import * as admin from 'firebase-admin'
 import * as express from 'express';
 const axios = require('axios');
 
-admin.initializeApp();
+admin.initializeApp(functions.config().firebase);
+const db = admin.firestore();
+
 const app = express();
 
 export const api = functions.https.onRequest(app);
+
+app.get('/user/:uuid', function (req, res) {
+    const uuid = req.params.uuid;
+    console.log('/user endpoint triggered for uuid:' + uuid);
+    
+    console.log('Getting doc for ' + uuid);
+    db.collection('users').doc(uuid).get().then((doc) => {
+        if (!doc.exists) {
+            console.log(`Document ${uuid} doesn\'t exist`);
+            res.status(400).send(`Document ${uuid} doesn\'t exist`);
+        } else {
+            res.send(doc.data());
+        }
+    }).catch((err) => {
+        console.error(`Error getting document ${uuid} from collection \'users\'`, err);
+        res.status(400).send(`Error occured requesting ${uuid} from collections \'users\'`)
+        return;
+    });
+
+});
 
 app.use('/post', validateRequest);
 
@@ -44,7 +66,7 @@ async function validateRequest(request, response, next) {
             request_secret: request_secret,
             code: code
         });
-        const mcid_response = await axios.post(`https://api.minecraft.id/auth/status/${id}`, data,{
+        const mcid_response = await axios.post(`https://api.minecraft.id/auth/status/${id}`, data, {
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': data.length
@@ -52,7 +74,7 @@ async function validateRequest(request, response, next) {
         });
         console.log("minecraft.id responded verification with:");
         console.log(mcid_response.data);
-        
+
         // check if auth was verified
         if (mcid_response.data.status === 'VERIFIED') {
             next();
@@ -60,7 +82,7 @@ async function validateRequest(request, response, next) {
             response.send();
             return;
         }
-        
+
     } catch (error) {
         console.log("Error");
         console.log(error.response.data);
